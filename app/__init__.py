@@ -1,5 +1,5 @@
 from flask import Flask
-from app.extensions import bcrypt, db, migrate
+from app.extensions import db, migrate
 from config import Config
 
 def create_app(config_class=Config):
@@ -9,7 +9,9 @@ def create_app(config_class=Config):
     # Initialize Flask extension
     db.init_app(app)
     migrate.init_app(app, db)
-    bcrypt.init_app(app)
+
+    # Import models
+    from app import models
     
     @app.get("/health")
     def health():
