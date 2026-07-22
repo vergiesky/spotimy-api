@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from functools import wraps
+from uuid import UUID
 
 import jwt
 from flask import Blueprint, jsonify, request, current_app
@@ -18,6 +20,46 @@ def create_access_token(user):
     }
 
     return jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
+
+def get_bearer_token():
+    auth_header = request.headers.get("Authorization", "")
+
+    if not auth_header.startswith("Bearer "):
+        return None
+
+    return auth_header.removeprefix("Bearer ").strip()
+
+def token_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        token = get_bearer_token()
+
+        if not token:
+            return jsonify({"error": "Authorization token is required"}), 401
+
+        try:
+            payload = jwt.decode(
+                token,
+                current_app.config["SECRET_KEY"],
+                algorithms=["HS256"],
+            )
+
+            user_id = UUID(payload["sub"])
+
+        except jwt.ExpiredSignatureError:
+            return jsonify({"error": "Token has expired"}), 401
+
+        except (jwt.InvalidTokenError, KeyError, ValueError):
+            return jsonify({"error": "Invalid token"}), 401
+
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({"error": "User not found"}), 401
+
+        return view(user, *args, **kwargs)
+
+    return wrapped
 
 @auth_bp.post("/register")
 def register():
@@ -74,4 +116,7 @@ def login():
         "user": user.to_auth_dict()
     }), 200
 
-   
+@auth_bp.get("/me")
+@token_required
+def me(current_user):
+    return jsonify({"user": current_user.to_auth_dict()}), 200
