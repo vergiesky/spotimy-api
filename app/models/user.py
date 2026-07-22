@@ -47,5 +47,13 @@ class User(db.Model):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
     
+    def to_auth_dict(self):
+        return{
+            "id": str(self.id),
+            "username": self.username,
+            "email": self.email,
+            "role": self.role.value,
+        }
+    
     def __repr__(self):
         return f"<User {self.email}>"
