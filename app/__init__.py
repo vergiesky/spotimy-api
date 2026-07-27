@@ -16,6 +16,10 @@ def create_app(config_class=Config):
     # Blueprint auth
     from app.routes.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
+
+    # Blueprint music
+    from app.routes.music import music_bp
+    app.register_blueprint(music_bp, url_prefix="/api/music")
     
     @app.get("/health")
     def health():
