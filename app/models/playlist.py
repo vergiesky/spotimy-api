@@ -15,6 +15,14 @@ class Playlist(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    # Relasi many-to-many antara Playlist dan Music lewat tabel pivot playlist_music
+    # Dengan ini, jadinya bisa mengakses lagu dalam playlist menggunakan playlist.songs
+    # backref="playlists" membuat kebalikannya juga bisa: song.playlists
+    # lazy="select" berarti data lagu baru di-query saat playlist.songs diakses
+    # "Music": model yang direlasikan
+    # secondary: karena relasinya many-to-many, maka perlu table perantara (playlist_music)
+    # backref: membuat akses balik dari music ke playlist
+    # lazy="select": query lagu dilakukan saat atribut songs dipakai, bukan langsung saat playlist diambil
     songs = db.relationship("Music", secondary="playlist_music", backref="playlists", lazy="select")
 
     def to_dict(self):
