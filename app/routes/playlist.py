@@ -45,7 +45,7 @@ def get_playlist_detail(current_user, playlist_id):
 
     playlist = Playlist.query.filter_by(
         id = playlist_uuid,
-        user_id=current_user.id
+        user_id = current_user.id
     ).first()
 
     if not playlist:
@@ -74,7 +74,7 @@ def add_song_to_playlist(current_user, playlist_id):
 
     playlist = Playlist.query.filter_by(
         id = playlist_uuid,
-        user_id=current_user.id
+        user_id = current_user.id
     ).first()
 
     if not playlist:
@@ -112,7 +112,7 @@ def remove_song_from_playlist(current_user, playlist_id, music_id):
 
     playlist = Playlist.query.filter_by(
         id = playlist_uuid,
-        user_id=current_user.id
+        user_id = current_user.id
     ).first()
 
     if not playlist:
@@ -135,3 +135,23 @@ def remove_song_from_playlist(current_user, playlist_id, music_id):
         "music": song.to_public_dict(),
     }), 200
 
+@playlist_bp.delete("/<playlist_id>")
+@token_required
+def delete_playlist(current_user, playlist_id):
+    try:
+        playlist_uuid = UUID(playlist_id)
+    except ValueError:
+        return jsonify({"error": "Invalid playlist id"}), 400
+
+    playlist = Playlist.query.filter_by(
+        id = playlist_uuid,
+        user_id = current_user.id
+    ).first()
+
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    db.session.delete(playlist)
+    db.session.commit()
+
+    return jsonify({"message": "Playlist deleted successfully"}), 200
