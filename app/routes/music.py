@@ -60,7 +60,6 @@ def get_music_stream_url(current_user, music_id):
     if not stream_url:
         return jsonify({"error": "Failed to create stream URL"}), 502
 
-
     return jsonify({
         "stream_url": stream_url,
         "expires_in": expires_in
