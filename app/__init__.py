@@ -20,6 +20,10 @@ def create_app(config_class=Config):
     # Blueprint music
     from app.routes.music import music_bp
     app.register_blueprint(music_bp, url_prefix="/api/music")
+
+    # Blueprint playlist
+    from app.routes.playlist import playlist_bp
+    app.register_blueprint(playlist_bp, url_prefix="/api/playlists")
     
     @app.get("/health")
     def health():
