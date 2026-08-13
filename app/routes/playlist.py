@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request
+from uuid import UUID
 
 from app.extensions import db
 from app.models import Playlist
@@ -33,3 +34,24 @@ def create_playlist(current_user):
         "message": "Playlist created successfully",
         "playlists": playlist.to_public_dict()
     }), 201
+
+@playlist_bp.get("/<playlist_id>")
+@token_required
+def get_playlist_detail(current_user, playlist_id):
+    try:
+        playlist_uuid = UUID(playlist_id)
+    except ValueError:
+        return jsonify({"error": "Invalid playlist id"}), 400
+
+    playlist = Playlist.query.filter_by(
+        id = playlist_uuid,
+        user_id=current_user.id
+    ).first()
+
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    return jsonify({
+        "playlist": playlist.to_public_dict(),
+        "songs": [song.to_public_dict() for song in playlist.songs]
+    })
