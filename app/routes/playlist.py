@@ -96,3 +96,42 @@ def add_song_to_playlist(current_user, playlist_id):
         "playlist": playlist.to_public_dict(),
         "music": song.to_public_dict(),
     }), 201
+
+@playlist_bp.delete("<playlist_id>/songs/<music_id>")
+@token_required
+def remove_song_from_playlist(current_user, playlist_id, music_id):
+    try:
+        playlist_uuid = UUID(playlist_id)
+    except ValueError:
+        return jsonify({"error": "Invalid playlist id"}), 400
+
+    try:
+        music_uuid = UUID(music_id)
+    except ValueError:
+        return jsonify({"error": "Invalid music id"}), 400
+
+    playlist = Playlist.query.filter_by(
+        id = playlist_uuid,
+        user_id=current_user.id
+    ).first()
+
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+    
+    song = Music.query.get(music_uuid)
+
+    if not song:
+        return jsonify({"error": "Music not found"}), 404
+
+    if song not in playlist.songs:
+        return jsonify({"error": "Music is not in playlist"}), 404
+
+    playlist.songs.remove(song)
+    db.session.commit()
+
+    return jsonify({
+        "message": "Music removed from playlist successfully",
+        "playlist": playlist.to_public_dict(),
+        "music": song.to_public_dict(),
+    }), 200
+
