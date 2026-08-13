@@ -97,7 +97,7 @@ def add_song_to_playlist(current_user, playlist_id):
         "music": song.to_public_dict(),
     }), 201
 
-@playlist_bp.delete("<playlist_id>/songs/<music_id>")
+@playlist_bp.delete("/<playlist_id>/songs/<music_id>")
 @token_required
 def remove_song_from_playlist(current_user, playlist_id, music_id):
     try:
