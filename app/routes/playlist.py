@@ -44,8 +44,8 @@ def get_playlist_detail(current_user, playlist_id):
         return jsonify({"error": "Invalid playlist id"}), 400
 
     playlist = Playlist.query.filter_by(
-        id = playlist_uuid,
-        user_id = current_user.id
+        id=playlist_uuid,
+        user_id=current_user.id
     ).first()
 
     if not playlist:
@@ -73,8 +73,8 @@ def add_song_to_playlist(current_user, playlist_id):
         return jsonify({"error": "Invalid music id"}), 400
 
     playlist = Playlist.query.filter_by(
-        id = playlist_uuid,
-        user_id = current_user.id
+        id=playlist_uuid,
+        user_id=current_user.id
     ).first()
 
     if not playlist:
@@ -111,8 +111,8 @@ def remove_song_from_playlist(current_user, playlist_id, music_id):
         return jsonify({"error": "Invalid music id"}), 400
 
     playlist = Playlist.query.filter_by(
-        id = playlist_uuid,
-        user_id = current_user.id
+        id=playlist_uuid,
+        user_id=current_user.id
     ).first()
 
     if not playlist:
@@ -144,8 +144,8 @@ def delete_playlist(current_user, playlist_id):
         return jsonify({"error": "Invalid playlist id"}), 400
 
     playlist = Playlist.query.filter_by(
-        id = playlist_uuid,
-        user_id = current_user.id
+        id=playlist_uuid,
+        user_id=current_user.id
     ).first()
 
     if not playlist:
@@ -155,3 +155,42 @@ def delete_playlist(current_user, playlist_id):
     db.session.commit()
 
     return jsonify({"message": "Playlist deleted successfully"}), 200
+
+@playlist_bp.patch("/<playlist_id>")
+@token_required
+def update_playlist(current_user, playlist_id):
+    try:
+        playlist_uuid = UUID(playlist_id)
+    except ValueError:
+        return jsonify({"error": "Invalid playlist id"}), 400
+
+    playlist = Playlist.query.filter_by(
+        id=playlist_uuid,
+        user_id=current_user.id
+    ).first()
+
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    name = data.get("name")
+    cover_path = data.get("cover_path")
+
+    if name is not None:
+        name = name.strip()
+
+        if not name:
+            return jsonify({"error": "Playlist name cannot be empty"}), 400
+
+        playlist.name = name
+
+    if cover_path is not None:
+        playlist.cover_path = cover_path.strip() or None
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Playlist updated successfully",
+        "playlist": playlist.to_public_dict()
+    }), 200
