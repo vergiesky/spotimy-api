@@ -63,3 +63,22 @@ def add_music_from_youtube(current_user):
 
     except Exception as error:
         return jsonify({"error": str(error)}), 500
+
+@admin_bp.get("/music")
+@role_required("admin", "superadmin")
+def list_admin_music(current_user):
+    search = (request.args.get("search") or "").strip()
+
+    query = Music.query
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Music.title.ilike(f"%{search}%"),
+                Music.artist.ilike(f"%{search}%"),
+            )
+        )
+
+    music = query.order_by(Music.created_at.desc()).all()
+
+    return jsonify({"music": [song.to_dict() for song in music]}), 200

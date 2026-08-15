@@ -24,3 +24,25 @@ def create_signed_url(path, expires_in=3600):
         return response.get("signedURL") or response.get("signed_url")
 
     return None
+
+def upload_file(file_content, destination_path, content_type="audio/mp4"):
+    supabase = get_supabase_client()
+
+    if not supabase:
+        return None
+
+    bucket_name = current_app.config.get("BUCKET_NAME", "spotimy")
+
+    if destination_path.startswith("/"):
+        destination_path = destination_path[1:]
+
+    supabase.storage.from_(bucket_name).upload(
+        path=destination_path,
+        file=file_content,
+        file_options={
+            "content-type": content_type,
+            "x-upsert": "true",
+        },
+    )
+
+    return destination_path

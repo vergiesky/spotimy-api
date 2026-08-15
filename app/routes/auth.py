@@ -61,6 +61,22 @@ def token_required(view):
 
     return wrapped
 
+def role_required(*roles):
+    def decorator(view):
+        @wraps(view)
+        @token_required
+        def wrapped(current_user, *args, **kwargs):
+            has_permission = any(current_user.has_role(role) for role in roles)
+
+            if not has_permission:
+                return jsonify({"error": "You do not have permission to access this resource"}), 403
+
+            return view(current_user, *args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
 @auth_bp.post("/register")
 def register():
     data = request.get_json(silent=True) or {}

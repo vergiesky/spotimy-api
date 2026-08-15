@@ -24,6 +24,10 @@ def create_app(config_class=Config):
     # Blueprint playlist
     from app.routes.playlist import playlist_bp
     app.register_blueprint(playlist_bp, url_prefix="/api/playlists")
+
+    # Blueprint admin
+    from app.routes.admin import admin_bp
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
     
     @app.get("/health")
     def health():
