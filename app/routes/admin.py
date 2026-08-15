@@ -1,5 +1,6 @@
 import os
 from flask import Blueprint, jsonify, request
+from uuid import UUID
 
 from app.extensions import db
 from app.models import Music
@@ -66,7 +67,7 @@ def add_music_from_youtube(current_user):
 
 @admin_bp.get("/music")
 @role_required("admin", "superadmin")
-def list_admin_music(current_user):
+def list_music(current_user):
     search = (request.args.get("search") or "").strip()
 
     query = Music.query
@@ -82,3 +83,123 @@ def list_admin_music(current_user):
     music = query.order_by(Music.created_at.desc()).all()
 
     return jsonify({"music": [song.to_dict() for song in music]}), 200
+
+@admin_bp.patch("/music/<music_id>/edit")
+@role_required("admin", "superadmin")
+def update_music(current_user, music_id):
+    try:
+        music_uuid = UUID(music_id)
+    except ValueError:
+        return jsonify({"error": "Invalid music id"}), 400
+
+    music = Music.query.get(music_uuid)
+
+    if not music:
+        return jsonify({"error": "Music not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    if "title" in data:
+        title = (data.get("title") or "").strip()
+
+        if not title:
+            return jsonify({"error": "Title cannot be empty"}), 400
+
+        music.title = title
+
+    if "artist" in data:
+        artist = (data.get("artist") or "").strip()
+
+        if not artist:
+            return jsonify({"error": "Artist cannot be empty"}), 400
+
+        music.artist = artist
+
+    if "album" in data:
+        music.album = (data.get("album") or "").strip() or None
+
+    if "duration" in data:
+        duration = data.get("duration")
+
+        if duration is None:
+            music.duration = None
+        else:
+            try:
+                duration = int(duration)
+            except (TypeError, ValueError):
+                return jsonify({"error": "Duration must be an integer"}), 400
+
+            if duration < 0:
+                return jsonify({"error": "Duration cannot be negative"}), 400
+
+            music.duration = duration
+
+    if "cover_path" in data:
+        music.cover_path = (data.get("cover_path") or "").strip() or None
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Music updated successfully",
+        "music": music.to_dict(),
+    }), 200
+
+@admin_bp.patch("/music/<music_id>/edit")
+@role_required("admin", "superadmin")
+def update_admin_music(current_user, music_id):
+    try:
+        music_uuid = UUID(music_id)
+    except ValueError:
+        return jsonify({"error": "Invalid music id"}), 400
+
+    music = Music.query.get(music_uuid)
+
+    if not music:
+        return jsonify({"error": "Music not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    if "title" in data:
+        title = (data.get("title") or "").strip()
+
+        if not title:
+            return jsonify({"error": "Title cannot be empty"}), 400
+
+        music.title = title
+
+    if "artist" in data:
+        artist = (data.get("artist") or "").strip()
+
+        if not artist:
+            return jsonify({"error": "Artist cannot be empty"}), 400
+
+        music.artist = artist
+
+    if "album" in data:
+        music.album = (data.get("album") or "").strip() or None
+
+    if "duration" in data:
+        duration = data.get("duration")
+
+        if duration is None:
+            music.duration = None
+        else:
+            try:
+                duration = int(duration)
+            except (TypeError, ValueError):
+                return jsonify({"error": "Duration must be an integer"}), 400
+
+            if duration < 0:
+                return jsonify({"error": "Duration cannot be negative"}), 400
+
+            music.duration = duration
+
+    if "cover_path" in data:
+        music.cover_path = (data.get("cover_path") or "").strip() or None
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "Music updated successfully",
+        "music": music.to_dict(),
+    }), 200
