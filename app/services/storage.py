@@ -46,3 +46,18 @@ def upload_file(file_content, destination_path, content_type="audio/mp4"):
     )
 
     return destination_path
+
+def delete_file(path):
+    supabase = get_supabase_client()
+
+    if not supabase:
+        return False
+
+    bucket_name = current_app.config.get("BUCKET_NAME", "spotimy")
+
+    if path.startswith("/"):
+        path = path[1:]
+
+    supabase.storage.from_(bucket_name).remove([path])
+
+    return True
