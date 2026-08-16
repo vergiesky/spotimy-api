@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request
 from uuid import UUID
 
 from app.extensions import db
-from app.models import Music, User
+from app.models import Music, User, UserRole
 from app.services.downloader import download_audio
 from app.services.storage import upload_file, delete_file
 from app.routes.auth import role_required
@@ -185,10 +185,42 @@ def list_users(current_user):
             db.or_(
                 User.username.ilike(f"%{search}%"),
                 User.email.ilike(f"%{search}%"),
-                User.role.ilike(f"%{search}%")
             )
         )
 
     users = query.order_by(User.created_at.desc()).all()
 
     return jsonify({"users": [user.to_dict() for user in users]}), 200
+
+@admin_bp.patch("/users/<user_id>/role")
+@role_required("superadmin")
+def update_user_role(current_user, user_id):
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        return jsonify({"error": "Invalid user id"}), 400
+
+    user = User.query.get(user_uuid)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if user.id == current_user.id:
+        return jsonify({"error": "You cannot change your own role"}), 400
+
+    data = request.get_json(silent=True) or {}
+    role = (data.get("role") or "").strip().lower()
+
+    valid_roles = [user_role.value for user_role in UserRole]
+
+    if role not in valid_roles:
+        return jsonify({"error": "Invalid role"}), 400
+
+    user.role = UserRole(role)
+
+    db.session.commit()
+
+    return jsonify({
+        "message": "User role updated successfully",
+        "user": user.to_dict()
+    }), 200
