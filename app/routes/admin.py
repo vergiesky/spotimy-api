@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, request
 from uuid import UUID
 
 from app.extensions import db
-from app.models import Music
+from app.models import Music, User
 from app.services.downloader import download_audio
 from app.services.storage import upload_file, delete_file
 from app.routes.auth import role_required
@@ -172,3 +172,23 @@ def delete_music(current_user, music_id):
     db.session.commit()
 
     return jsonify({"message": "Music deleted successfully"}), 200
+
+@admin_bp.get("/users")
+@role_required("superadmin")
+def list_users(current_user):
+    search = (request.args.get("search") or "").strip().lower()
+
+    query = User.query
+
+    if search:
+        query = query.filter(
+            db.or_(
+                User.username.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%"),
+                User.role.ilike(f"%{search}%")
+            )
+        )
+
+    users = query.order_by(User.created_at.desc()).all()
+
+    return jsonify({"users": [user.to_dict() for user in users]}), 200
