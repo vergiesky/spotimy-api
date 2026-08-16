@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from uuid import UUID
 
 from app.extensions import db
-from app.models import Playlist, Music
+from app.models import Playlist, Music, PlaylistMusic
 from app.routes.auth import token_required
 
 playlist_bp = Blueprint("playlist", __name__)
@@ -51,9 +51,17 @@ def get_playlist_detail(current_user, playlist_id):
     if not playlist:
         return jsonify({"error": "Playlist not found"}), 404
 
+    playlist_songs = (
+        db.session.query(Music)
+        .join(PlaylistMusic, PlaylistMusic.music_id == Music.id)
+        .filter(PlaylistMusic.playlist_id == playlist.id)
+        .order_by(PlaylistMusic.position.asc(), PlaylistMusic.added_at.asc())
+        .all()
+    )
+
     return jsonify({
         "playlist": playlist.to_public_dict(),
-        "songs": [song.to_public_dict() for song in playlist.songs]
+        "songs": [song.to_public_dict() for song in playlist_songs]
     }), 200
 
 @playlist_bp.post("/<playlist_id>/songs")
