@@ -194,7 +194,7 @@ def list_users(current_user):
 
 @admin_bp.patch("/users/<user_id>/role")
 @role_required("superadmin")
-def update_user_role(current_user, user_id):
+def update_role(current_user, user_id):
     try:
         user_uuid = UUID(user_id)
     except ValueError:
@@ -224,3 +224,31 @@ def update_user_role(current_user, user_id):
         "message": "User role updated successfully",
         "user": user.to_dict()
     }), 200
+
+@admin_bp.delete("/users/<user_id>/delete")
+@role_required("superadmin")
+def delete_user(current_user, user_id):
+    try:
+        user_uuid = UUID(user_id)
+    except ValueError:
+        return jsonify({"error": "Invalid user id"}), 400
+
+    user = User.query.get(user_uuid)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    if user.id == current_user.id:
+        return jsonify({"error": "You cannot delete your own account"}), 400
+
+    if user.role == UserRole.SUPERADMIN:
+        superadmin_count = User.query.filter_by(role=UserRole.SUPERADMIN).count()
+
+        if superadmin_count <= 1:
+            return jsonify({"error": "Cannot delete the last superadmin account"}), 400
+
+    db.session.delete(user)
+    db.session.commit()
+
+    return jsonify({"message": "User deleted successfully"}), 200
+    
