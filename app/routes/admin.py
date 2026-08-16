@@ -7,6 +7,7 @@ from app.models import Music, User, UserRole
 from app.services.downloader import download_audio
 from app.services.storage import upload_file, delete_file
 from app.routes.auth import role_required
+from app.utils import get_pagination_params, pagination_meta
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -80,9 +81,18 @@ def list_music(current_user):
             )
         )
 
-    music = query.order_by(Music.created_at.desc()).all()
+    page, limit = get_pagination_params()
 
-    return jsonify({"music": [song.to_dict() for song in music]}), 200
+    pagination = query.order_by(Music.created_at.desc()).paginate(
+        page=page,
+        per_page=limit,
+        error_out=False,
+    )
+
+    return jsonify({
+        "music": [song.to_dict() for song in pagination.items],
+        "pagination": pagination_meta(pagination),
+    }), 200
 
 @admin_bp.patch("/music/<music_id>")
 @role_required("admin", "superadmin")
@@ -188,9 +198,18 @@ def list_users(current_user):
             )
         )
 
-    users = query.order_by(User.created_at.desc()).all()
+    page, limit = get_pagination_params()
 
-    return jsonify({"users": [user.to_dict() for user in users]}), 200
+    pagination = query.order_by(User.created_at.desc()).paginate(
+        page=page,
+        per_page=limit,
+        error_out=False,
+    )
+
+    return jsonify({
+        "users": [user.to_dict() for user in pagination.items],
+        "pagination": pagination_meta(pagination),
+    }), 200
 
 @admin_bp.patch("/users/<user_id>/role")
 @role_required("superadmin")

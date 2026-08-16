@@ -3,6 +3,7 @@ from uuid import UUID
 from app.models import Music
 from app.routes.auth import token_required
 from app.services.storage import create_signed_url
+from app.utils import get_pagination_params, pagination_meta
 
 music_bp = Blueprint("music", __name__)
 
@@ -18,10 +19,17 @@ def list_music():
             (Music.artist.ilike(f"%{search}%"))
         )
 
-    songs = query.order_by(Music.title.asc()).all()
+    page, limit = get_pagination_params()
+
+    pagination = query.order_by(Music.title.asc()).paginate(
+        page=page,
+        per_page=limit,
+        error_out=False,
+    )
 
     return jsonify({
-        "music": [song.to_public_dict() for song in songs]
+        "music": [song.to_public_dict() for song in pagination.items],
+        "pagination": pagination_meta(pagination),
     }), 200
 
 @music_bp.get("/<music_id>")
