@@ -10,7 +10,7 @@ from app.routes.auth import role_required
 
 admin_bp = Blueprint("admin", __name__)
 
-@admin_bp.post("/music/add")
+@admin_bp.post("/music")
 @role_required("admin", "superadmin")
 def add_music_from_youtube(current_user):
     data = request.get_json(silent=True) or {}
@@ -84,7 +84,7 @@ def list_music(current_user):
 
     return jsonify({"music": [song.to_dict() for song in music]}), 200
 
-@admin_bp.patch("/music/<music_id>/edit")
+@admin_bp.patch("/music/<music_id>")
 @role_required("admin", "superadmin")
 def update_music(current_user, music_id):
     try:
@@ -144,7 +144,7 @@ def update_music(current_user, music_id):
         "music": music.to_dict(),
     }), 200
 
-@admin_bp.delete("/music/<music_id>/delete")
+@admin_bp.delete("/music/<music_id>")
 @role_required("admin", "superadmin")
 def delete_music(current_user, music_id):
     try:
@@ -225,7 +225,7 @@ def update_role(current_user, user_id):
         "user": user.to_dict()
     }), 200
 
-@admin_bp.delete("/users/<user_id>/delete")
+@admin_bp.delete("/users/<user_id>")
 @role_required("superadmin")
 def delete_user(current_user, user_id):
     try:
