@@ -246,3 +246,56 @@ def update_playlist(current_user, playlist_id):
         "message": "Playlist updated successfully",
         "playlist": playlist.to_public_dict()
     }), 200
+
+@playlist_bp.patch("/<playlist_id>/songs/reorder")
+@token_required
+def reorder_playlist_songs(current_user, playlist_id):
+    try:
+        playlist_uuid = UUID(playlist_id)
+    except ValueError:
+        return jsonify({"error": "Invalid playlist id"}), 400
+
+    playlist = Playlist.query.filter_by(
+        id=playlist_uuid,
+        user_id=current_user.id
+    ).first()
+
+    if not playlist:
+        return jsonify({"error": "Playlist not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+    music_ids = data.get("music_ids") or []
+
+    if not isinstance(music_ids, list):
+        return jsonify({"error": "music_ids must be a list"}), 400
+
+    playlist_music_items = PlaylistMusic.query.filter_by(
+        playlist_id=playlist.id
+    ).all()
+
+    playlist_music_by_music_id = {
+        str(item.music_id): item
+        for item in playlist_music_items
+    }
+
+    if set(music_ids) != set(playlist_music_by_music_id.keys()):
+        return jsonify({"error": "music_ids must match all songs in the playlist"}), 400
+
+    for position, music_id in enumerate(music_ids):
+        playlist_music_by_music_id[music_id].position = position
+
+    db.session.commit()
+
+    playlist_songs = (
+        db.session.query(Music)
+        .join(PlaylistMusic, PlaylistMusic.music_id == Music.id)
+        .filter(PlaylistMusic.playlist_id == playlist.id)
+        .order_by(PlaylistMusic.position.asc(), PlaylistMusic.added_at.asc())
+        .all()
+    )
+
+    return jsonify({
+        "message": "Playlist songs reordered successfully",
+        "playlist": playlist.to_public_dict(),
+        "songs": [song.to_public_dict() for song in playlist_songs]
+    }), 200
