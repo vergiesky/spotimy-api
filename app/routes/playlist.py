@@ -93,10 +93,54 @@ def add_song_to_playlist(current_user, playlist_id):
     if not song:
         return jsonify({"error": "Music not found"}), 404
 
-    if song in playlist.songs:
+    # mengecek apakah lagu sudah ada di playlist
+    existing_song = PlaylistMusic.query.filter_by(
+        playlist_id=playlist.id,
+        music_id=song.id
+    ).first()
+
+    # Kalau ditemukan, berarti lagu tersebut sudah ada di playlist
+    if existing_song:
         return jsonify({"error": "Music already exists in playlist"}), 409
 
-    playlist.songs.append(song)
+    # mencari nilai position paling besar dari semua lagu yang ada di playlist tersebut
+    # contoh:
+    # Playlist:
+    # Song A -> position 0
+    # Song B -> position 1
+    # Song C -> position 2
+    # MAX(position) = 2
+    last_position = (
+        db.session.query(db.func.max(PlaylistMusic.position))
+        .filter(PlaylistMusic.playlist_id == playlist.id)
+        .scalar()
+    )
+
+    # kalau playlist masih kosong:
+    # last_position = None
+    # next_position = 0
+    #
+    # kalau sudah ada lagu:
+    # last_position = 2
+    # next_position = 3
+    next_position = 0 if last_position is None else last_position + 1
+
+    # membuat object PlaylistMusic baru
+    # misalnya:
+    # playlist_id = 10
+    # music_id    = 25
+    # position    = 3
+    # artinya:
+    # tambahkan music 25 ke playlist 10 pada urutan ke-3
+    playlist_music = PlaylistMusic(
+        playlist_id=playlist.id,
+        music_id=song.id,
+        position=next_position,
+    )
+
+    # memasukkan object PlaylistMusic yang baru dibuat ke dalam session database
+    db.session.add(playlist_music)
+    # commit = benar-benar menyimpan perubahan ke database
     db.session.commit()
 
     return jsonify({
