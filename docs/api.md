@@ -623,8 +623,6 @@ Success response:
 }
 ```
 
-Notes:
-
 ## Admin Users
 
 Endpoint untuk superadmin mengelola user.
