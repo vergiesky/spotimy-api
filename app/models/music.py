@@ -40,6 +40,7 @@ class Music(db.Model):
             "artist": self.artist,
             "album": self.album,
             "duration": self.duration,
+            "cover_path": self.cover_path,
         }
 
     def __repr__(self):
