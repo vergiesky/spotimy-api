@@ -104,8 +104,11 @@ def register():
     db.session.add(user)
     db.session.commit()
 
+    token = create_access_token(user)
+
     return jsonify({
         "message": "User registered successfully",
+        "token": token,
         "user": user.to_auth_dict()
     }), 201
 
