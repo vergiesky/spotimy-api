@@ -3,6 +3,7 @@
 ![Version](https://img.shields.io/badge/version-v1.0.0-brightgreen.svg)
 
 ![Python](https://img.shields.io/badge/Python-3.11.9-3776AB.svg?logo=python&logoColor=white) ![Flask](https://img.shields.io/badge/Flask-3.1.3-000000.svg?logo=flask&logoColor=white) 
+
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-4169E1.svg?logo=postgresql&logoColor=white) ![Supabase](https://img.shields.io/badge/Supabase-2.31.0-3FCF8E.svg?logo=supabase&logoColor=white)
 
 ## About / Description
