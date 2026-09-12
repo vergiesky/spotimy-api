@@ -123,12 +123,21 @@ def download_audio(url):
         "noplaylist": True,
         "quiet": True,
         "remote_components": ["ejs:github"],
-        "extractor_args": {
-        "youtube": {
-            "player_client": ["web", "android"],
-        },
-    },
     }
+
+    if cookie_path:
+        ydl_opts["cookiefile"] = cookie_path
+        ydl_opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["web"],
+            },
+        }
+    else:
+        ydl_opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android"],
+            },
+        }
 
     if cookie_path:
         ydl_opts["cookiefile"] = cookie_path
