@@ -1,31 +1,61 @@
 import os
 from flask import Blueprint, jsonify, request
+from sqlalchemy.exc import IntegrityError
 from uuid import UUID
 
 from app.extensions import db
 from app.models import Music, User, UserRole
-from app.services.downloader import download_audio
+from app.services.downloader import DownloadAudioError, download_audio, extract_youtube_video_id
 from app.services.storage import upload_file, delete_file
 from app.routes.auth import role_required
 from app.utils import get_pagination_params, pagination_meta
 
 admin_bp = Blueprint("admin", __name__)
 
+def get_audio_content_type(file_path):
+    extension = os.path.splitext(file_path)[1].lower()
+
+    return {
+        ".m4a": "audio/mp4",
+        ".mp4": "audio/mp4",
+        ".mp3": "audio/mpeg",
+        ".opus": "audio/ogg",
+        ".webm": "audio/webm",
+    }.get(extension, "application/octet-stream")
+
 @admin_bp.post("/music")
 @role_required("admin", "superadmin")
 def add_music_from_youtube(current_user):
     data = request.get_json(silent=True) or {}
+    file_path = None
+    uploaded_path = None
 
     youtube_url = (data.get("youtube_url") or "").strip()
 
     if not youtube_url:
         return jsonify({"error": "youtube_url is required"}), 400
 
-    try:
-        audio_data = download_audio(youtube_url)
+    youtube_video_id = extract_youtube_video_id(youtube_url)
 
-        if not audio_data:
-            return jsonify({"error": "Failed to download audio"}), 400
+    if not youtube_video_id:
+        return jsonify({"error": "Invalid YouTube video URL"}), 400
+
+    existing_music = Music.query.filter_by(youtube_video_id=youtube_video_id).first()
+
+    if existing_music:
+        return jsonify({
+            "error": "Music already exists",
+            "music": existing_music.to_dict(),
+        }), 409
+
+    try:
+        try:
+            audio_data = download_audio(youtube_url)
+        except DownloadAudioError as error:
+            return jsonify({
+                "error": "Failed to download audio",
+                "detail": str(error),
+            }), 400
 
         file_path = audio_data["file_path"]
         filename = os.path.basename(file_path)
@@ -37,7 +67,7 @@ def add_music_from_youtube(current_user):
         uploaded_path = upload_file(
             file_content,
             audio_path,
-            content_type="audio/mp4",
+            content_type=get_audio_content_type(file_path),
         )
 
         if not uploaded_path:
@@ -49,6 +79,8 @@ def add_music_from_youtube(current_user):
             duration=audio_data["duration"],
             audio_path=uploaded_path,
             cover_path=audio_data["cover_path"],
+            source_url=youtube_url,
+            youtube_video_id=youtube_video_id,
             created_by=current_user.id,
         )
 
@@ -63,7 +95,31 @@ def add_music_from_youtube(current_user):
             "music": music.to_dict(),
         }), 201
 
+    except IntegrityError:
+        db.session.rollback()
+
+        if uploaded_path:
+            try:
+                delete_file(uploaded_path)
+            except Exception:
+                pass
+
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+
+        existing_music = Music.query.filter_by(youtube_video_id=youtube_video_id).first()
+
+        return jsonify({
+            "error": "Music already exists",
+            "music": existing_music.to_dict() if existing_music else None,
+        }), 409
+
     except Exception as error:
+        db.session.rollback()
+
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+
         return jsonify({"error": str(error)}), 500
 
 @admin_bp.get("/music")

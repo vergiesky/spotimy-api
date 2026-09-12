@@ -37,6 +37,7 @@ Success response:
 ```json
 {
   "message": "User registered successfully",
+  "token": "jwt-token",
   "user": {
     "id": "user-id",
     "username": "test",
@@ -251,7 +252,7 @@ Success response:
     {
       "id": "playlist-id",
       "name": "My Playlist",
-      "cover_path": "https://example.com/cover.jpg",
+      "cover_path": "https://signed-url-from-supabase",
       "total_songs": 3
     }
   ]
@@ -300,7 +301,7 @@ Success response:
   "playlist": {
     "id": "playlist-id",
     "name": "My Playlist",
-    "cover_path": "https://example.com/cover.jpg",
+    "cover_path": "https://signed-url-from-supabase",
     "total_songs": 2
   },
   "songs": [
@@ -322,13 +323,31 @@ Success response:
 PATCH /playlists/<playlist_id>
 ```
 
-Request body:
+Request body untuk mengubah nama saja:
 
 ```json
 {
-  "name": "Updated Playlist Name",
-  "cover_path": "https://example.com/new-cover.jpg"
+  "name": "Updated Playlist Name"
 }
+```
+
+Request body untuk mengubah nama dan upload cover:
+
+```text
+Content-Type: multipart/form-data
+
+name=Updated Playlist Name
+cover=<image-file>
+```
+
+Cover rules:
+
+```text
+Field file harus bernama cover.
+Format yang diterima: JPEG, PNG, WebP.
+Ukuran maksimal: 5 MB.
+Resolusi maksimal: 20 megapixels.
+cover_path tidak boleh dikirim saat update playlist.
 ```
 
 Success response:
@@ -339,7 +358,7 @@ Success response:
   "playlist": {
     "id": "playlist-id",
     "name": "Updated Playlist Name",
-    "cover_path": "https://example.com/new-cover.jpg",
+    "cover_path": "https://signed-url-from-supabase",
     "total_songs": 2
   }
 }
@@ -357,6 +376,13 @@ Success response:
 {
   "message": "Playlist deleted successfully"
 }
+```
+
+Notes:
+
+```text
+Jika playlist memiliki cover yang tersimpan di folder playlist-covers/,
+backend akan mencoba menghapus file cover tersebut dari Supabase Storage.
 ```
 
 ### Add Song To Playlist
@@ -381,7 +407,7 @@ Success response:
   "playlist": {
     "id": "playlist-id",
     "name": "My Playlist",
-    "cover_path": "https://example.com/cover.jpg",
+    "cover_path": "https://signed-url-from-supabase",
     "total_songs": 1
   },
   "music": {
@@ -409,7 +435,7 @@ Success response:
   "playlist": {
     "id": "playlist-id",
     "name": "My Playlist",
-    "cover_path": "https://example.com/cover.jpg",
+    "cover_path": "https://signed-url-from-supabase",
     "total_songs": 0
   },
   "music": {
@@ -449,7 +475,7 @@ Success response:
   "playlist": {
     "id": "playlist-id",
     "name": "My Playlist",
-    "cover_path": "https://example.com/cover.jpg",
+    "cover_path": "https://signed-url-from-supabase",
     "total_songs": 3
   },
   "songs": [
@@ -470,6 +496,15 @@ Notes:
 ```text
 music_ids harus berisi semua music_id yang ada di playlist tersebut.
 Urutan array music_ids menentukan posisi lagu di playlist.
+```
+
+### Playlist Cover Notes
+
+```text
+cover_path pada response playlist bisa berisi null, URL eksternal lama,
+atau signed URL Supabase untuk cover yang diupload dari mobile app.
+Signed URL bersifat sementara dan bisa berubah saat data playlist diminta ulang.
+Client cukup memakai nilai cover_path dari response sebagai image URL.
 ```
 
 ## Admin Music
@@ -515,6 +550,30 @@ Success response:
     "duration": 274,
     "audio_path": "library/audio-file.m4a",
     "cover_path": "https://i.ytimg.com/...",
+    "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+    "youtube_video_id": "VIDEO_ID",
+    "created_by": "user-id",
+    "created_at": "2026-08-16T10:00:00+00:00",
+    "updated_at": "2026-08-16T10:00:00+00:00"
+  }
+}
+```
+
+Duplicate response:
+
+```json
+{
+  "error": "Music already exists",
+  "music": {
+    "id": "music-id",
+    "title": "Music Title",
+    "artist": "Artist Name",
+    "album": null,
+    "duration": 274,
+    "audio_path": "library/audio-file.m4a",
+    "cover_path": "https://i.ytimg.com/...",
+    "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+    "youtube_video_id": "VIDEO_ID",
     "created_by": "user-id",
     "created_at": "2026-08-16T10:00:00+00:00",
     "updated_at": "2026-08-16T10:00:00+00:00"
@@ -555,6 +614,8 @@ Success response:
       "duration": 274,
       "audio_path": "library/audio-file.m4a",
       "cover_path": "https://i.ytimg.com/...",
+      "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+      "youtube_video_id": "VIDEO_ID",
       "created_by": "user-id",
       "created_at": "2026-08-16T10:00:00+00:00",
       "updated_at": "2026-08-16T10:00:00+00:00"
@@ -602,6 +663,8 @@ Success response:
     "duration": 240,
     "audio_path": "library/audio-file.m4a",
     "cover_path": "https://example.com/new-cover.jpg",
+    "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
+    "youtube_video_id": "VIDEO_ID",
     "created_by": "user-id",
     "created_at": "2026-08-16T10:00:00+00:00",
     "updated_at": "2026-08-16T10:10:00+00:00"
@@ -772,6 +835,30 @@ Example:
 }
 ```
 
+Example:
+
+```json
+{
+  "error": "Upload an image using the cover field"
+}
+```
+
+Example:
+
+```json
+{
+  "error": "Use JPEG, PNG, or WebP"
+}
+```
+
+Example:
+
+```json
+{
+  "error": "Cover must be between 1 byte and 5 MB"
+}
+```
+
 ### 401 Unauthorized
 
 Terjadi ketika endpoint membutuhkan token, tetapi token tidak dikirim, tidak valid, atau expired.
@@ -833,6 +920,18 @@ Example:
 ```json
 {
   "error": "Music already exists in playlist"
+}
+```
+
+### 415 Unsupported Media Type
+
+Terjadi ketika endpoint menerima format request yang tidak didukung.
+
+Example:
+
+```json
+{
+  "error": "Use JSON or multipart/form-data"
 }
 ```
 

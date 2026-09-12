@@ -15,6 +15,8 @@ class Music(db.Model):
     duration = db.Column(db.Integer)
     audio_path = db.Column(db.String(500), nullable=False)
     cover_path = db.Column(db.String(500))
+    source_url = db.Column(db.String(500))
+    youtube_video_id = db.Column(db.String(20), unique=True, index=True)
     created_by = db.Column(UUID(as_uuid=True), db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -28,6 +30,8 @@ class Music(db.Model):
             "duration": self.duration,
             "audio_path": self.audio_path,
             "cover_path": self.cover_path,
+            "source_url": self.source_url,
+            "youtube_video_id": self.youtube_video_id,
             "created_by": str(self.created_by) if self.created_by else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
