@@ -123,6 +123,11 @@ def download_audio(url):
         "noplaylist": True,
         "quiet": True,
         "remote_components": ["ejs:github"],
+        "extractor_args": {
+        "youtube": {
+            "player_client": ["web", "android"],
+        },
+    },
     }
 
     if cookie_path:
