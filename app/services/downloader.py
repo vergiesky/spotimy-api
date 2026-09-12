@@ -11,6 +11,19 @@ YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 class DownloadAudioError(Exception):
     pass
 
+def get_ffmpeg_path():
+    ffmpeg_path = shutil.which("ffmpeg")
+
+    if ffmpeg_path:
+        return ffmpeg_path
+
+    try:
+        import imageio_ffmpeg
+    except ImportError:
+        return None
+
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
 def get_downloaded_file(tmp_dir, file_id):
     for filename in os.listdir(tmp_dir):
         if filename.startswith(f"{file_id}.") and not filename.endswith(".part"):
@@ -22,14 +35,16 @@ def convert_to_m4a(file_path, file_id, tmp_dir):
     if file_path.lower().endswith(".m4a"):
         return file_path
 
-    if not shutil.which("ffmpeg"):
+    ffmpeg_path = get_ffmpeg_path()
+
+    if not ffmpeg_path:
         raise DownloadAudioError("FFmpeg is required to convert downloads to m4a")
 
     output_path = os.path.join(tmp_dir, f"{file_id}.m4a")
 
     result = subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_path,
             "-y",
             "-i",
             file_path,
