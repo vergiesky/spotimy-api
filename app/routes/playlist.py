@@ -1,18 +1,37 @@
-from flask import Blueprint, jsonify, request
-from uuid import UUID
+from io import BytesIO
+from uuid import UUID, uuid4
+
+from flask import Blueprint, current_app, jsonify, request
+from PIL import Image, UnidentifiedImageError
 
 from app.extensions import db
 from app.models import Playlist, Music, PlaylistMusic
 from app.routes.auth import token_required
+from app.services.storage import create_signed_url, delete_file, upload_file
 
 playlist_bp = Blueprint("playlist", __name__)
+
+
+def _playlist_response(playlist):
+    data = playlist.to_public_dict()
+    cover_path = data.get("cover_path")
+
+    if cover_path and not cover_path.startswith(("http://", "https://")):
+        data["cover_path"] = create_signed_url(cover_path) or cover_path
+
+    return data
+
+
+def _is_managed_playlist_cover(path):
+    return bool(path) and path.startswith("playlist-covers/")
+
 
 @playlist_bp.get("")
 @token_required
 def list_playlists(current_user):
     playlists = Playlist.query.filter_by(user_id=current_user.id).order_by(Playlist.name.asc()).all()
 
-    return jsonify({"playlists": [playlist.to_public_dict() for playlist in playlists]}), 200
+    return jsonify({"playlists": [_playlist_response(playlist) for playlist in playlists]}), 200
 
 @playlist_bp.post("")
 @token_required
@@ -32,7 +51,7 @@ def create_playlist(current_user):
 
     return jsonify({
         "message": "Playlist created successfully",
-        "playlist": playlist.to_public_dict()
+        "playlist": _playlist_response(playlist)
     }), 201
 
 @playlist_bp.get("/<playlist_id>")
@@ -60,7 +79,7 @@ def get_playlist_detail(current_user, playlist_id):
     )
 
     return jsonify({
-        "playlist": playlist.to_public_dict(),
+        "playlist": _playlist_response(playlist),
         "songs": [song.to_public_dict() for song in playlist_songs]
     }), 200
 
@@ -145,7 +164,7 @@ def add_song_to_playlist(current_user, playlist_id):
 
     return jsonify({
         "message": "Music added to playlist successfully",
-        "playlist": playlist.to_public_dict(),
+        "playlist": _playlist_response(playlist),
         "music": song.to_public_dict(),
     }), 201
 
@@ -183,7 +202,7 @@ def remove_song_from_playlist(current_user, playlist_id, music_id):
 
     return jsonify({
         "message": "Music removed from playlist successfully",
-        "playlist": playlist.to_public_dict(),
+        "playlist": _playlist_response(playlist),
         "music": song.to_public_dict(),
     }), 200
 
@@ -203,8 +222,16 @@ def delete_playlist(current_user, playlist_id):
     if not playlist:
         return jsonify({"error": "Playlist not found"}), 404
 
+    cover_path = playlist.cover_path
+
     db.session.delete(playlist)
     db.session.commit()
+
+    if _is_managed_playlist_cover(cover_path):
+        try:
+            delete_file(cover_path)
+        except Exception:
+            current_app.logger.exception("Failed to delete playlist cover")
 
     return jsonify({"message": "Playlist deleted successfully"}), 200
 
@@ -224,27 +251,75 @@ def update_playlist(current_user, playlist_id):
     if not playlist:
         return jsonify({"error": "Playlist not found"}), 404
 
-    data = request.get_json(silent=True) or {}
+    if request.is_json:
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid request body"}), 400
+    elif request.mimetype == "multipart/form-data":
+        data = request.form
+    else:
+        return jsonify({"error": "Use JSON or multipart/form-data"}), 415
 
-    name = data.get("name")
-    cover_path = data.get("cover_path")
+    if "cover_path" in data:
+        return jsonify({"error": "Upload an image using the cover field"}), 400
 
-    if name is not None:
-        name = name.strip()
+    name = data.get("name", playlist.name)
+    if not isinstance(name, str) or not 1 <= len(name.strip()) <= 255:
+        return jsonify({"error": "Name must contain 1-255 characters"}), 400
 
-        if not name:
-            return jsonify({"error": "Playlist name cannot be empty"}), 400
+    cover = request.files.get("cover")
+    uploaded_path = None
+    old_cover_path = playlist.cover_path
+    if cover is not None:
+        max_size = 5 * 1024 * 1024
+        content = cover.read(max_size + 1)
+        if not content or len(content) > max_size:
+            return jsonify({"error": "Cover must be between 1 byte and 5 MB"}), 400
+        try:
+            with Image.open(BytesIO(content)) as image:
+                formats = {
+                    "JPEG": ("jpg", "image/jpeg"),
+                    "PNG": ("png", "image/png"),
+                    "WEBP": ("webp", "image/webp"),
+                }
+                if image.format not in formats:
+                    return jsonify({"error": "Use JPEG, PNG, or WebP"}), 400
+                if image.width * image.height > 20_000_000:
+                    return jsonify({"error": "Cover must not exceed 20 megapixels"}), 400
+                extension, content_type = formats[image.format]
+                image.verify()
+        except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+            return jsonify({"error": "Invalid cover image"}), 400
 
-        playlist.name = name
+    try:
+        if cover is not None:
+            destination = f"playlist-covers/{playlist.id}/{uuid4().hex}.{extension}"
+            uploaded_path = upload_file(content, destination, content_type)
+            if not uploaded_path:
+                raise RuntimeError("Cover upload failed")
+            playlist.cover_path = uploaded_path
+        playlist.name = name.strip()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to update playlist")
 
-    if cover_path is not None:
-        playlist.cover_path = cover_path.strip() or None
+        if uploaded_path:
+            try:
+                delete_file(uploaded_path)
+            except Exception:
+                current_app.logger.exception("Failed to clean up uploaded cover")
+        return jsonify({"error": "Failed to update playlist"}), 500
 
-    db.session.commit()
+    if uploaded_path and _is_managed_playlist_cover(old_cover_path):
+        try:
+            delete_file(old_cover_path)
+        except Exception:
+            current_app.logger.exception("Failed to delete old playlist cover")
 
     return jsonify({
         "message": "Playlist updated successfully",
-        "playlist": playlist.to_public_dict()
+        "playlist": _playlist_response(playlist)
     }), 200
 
 @playlist_bp.patch("/<playlist_id>/songs/reorder")
@@ -296,6 +371,6 @@ def reorder_playlist_songs(current_user, playlist_id):
 
     return jsonify({
         "message": "Playlist songs reordered successfully",
-        "playlist": playlist.to_public_dict(),
+        "playlist": _playlist_response(playlist),
         "songs": [song.to_public_dict() for song in playlist_songs]
     }), 200
