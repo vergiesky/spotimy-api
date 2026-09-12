@@ -4,7 +4,6 @@ import shutil
 import subprocess
 import yt_dlp
 import uuid
-import base64
 from urllib.parse import parse_qs, urlparse
 
 YOUTUBE_VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
@@ -102,20 +101,6 @@ def download_audio(url):
     file_id = str(uuid.uuid4())
     output_template = os.path.join(tmp_dir, f"{file_id}.%(ext)s")
 
-    cookies_b64 = os.getenv("YOUTUBE_COOKIES_B64")
-    cookie_path = None
-
-    if cookies_b64:
-        cookie_path = os.path.join(
-            tmp_dir,
-            f"youtube-cookies-{file_id}.txt"
-        )
-
-        cookies_data = base64.b64decode(cookies_b64)
-
-        with open(cookie_path, "wb") as file:
-            file.write(cookies_data)
-
     # yt-dlp options
     ydl_opts = {
         "format": "bestaudio[ext=m4a]/bestaudio/best[ext=mp4]/best",
@@ -123,24 +108,12 @@ def download_audio(url):
         "noplaylist": True,
         "quiet": True,
         "remote_components": ["ejs:github"],
-    }
-
-    if cookie_path:
-        ydl_opts["cookiefile"] = cookie_path
-        ydl_opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["web"],
-            },
-        }
-    else:
-        ydl_opts["extractor_args"] = {
+        "extractor_args": {
             "youtube": {
                 "player_client": ["android"],
             },
-        }
-
-    if cookie_path:
-        ydl_opts["cookiefile"] = cookie_path
+        },
+    }
 
     try:
         node_path = shutil.which("node")
@@ -165,7 +138,3 @@ def download_audio(url):
     except Exception as error:
         print(f"Download error: {error}")
         raise DownloadAudioError(str(error)) from error
-
-    finally:
-        if cookie_path and os.path.exists(cookie_path):
-            os.remove(cookie_path)
