@@ -116,10 +116,6 @@ def download_audio(url):
     }
 
     try:
-        node_path = shutil.which("node")
-        if node_path:
-            ydl_opts["js_runtimes"] = {"node": {"path": node_path}}
-
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             downloaded_file = get_downloaded_file(tmp_dir, file_id)
