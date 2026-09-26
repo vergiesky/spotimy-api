@@ -1,16 +1,25 @@
 import os
-from flask import Blueprint, jsonify, request
+from uuid import UUID, uuid4
+
+import httpx
+from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy.exc import IntegrityError
-from uuid import UUID
 
 from app.extensions import db
 from app.models import Music, User, UserRole
-from app.services.downloader import DownloadAudioError, download_audio, extract_youtube_video_id
-from app.services.storage import upload_file, delete_file
 from app.routes.auth import role_required
+from app.services.storage import delete_file, upload_file
+from app.services.youtube import extract_youtube_video_id
 from app.utils import get_pagination_params, pagination_meta
 
 admin_bp = Blueprint("admin", __name__)
+
+MAX_AUDIO_UPLOAD_SIZE = 30 * 1024 * 1024
+ALLOWED_AUDIO_EXTENSIONS = {
+    ".aac",
+    ".m4a",
+    ".mp3",
+}
 
 def get_audio_content_type(file_path):
     extension = os.path.splitext(file_path)[1].lower()
@@ -19,15 +28,59 @@ def get_audio_content_type(file_path):
         ".m4a": "audio/mp4",
         ".mp4": "audio/mp4",
         ".mp3": "audio/mpeg",
+        ".aac": "audio/aac",
         ".opus": "audio/ogg",
+        ".ogg": "audio/ogg",
+        ".wav": "audio/wav",
         ".webm": "audio/webm",
     }.get(extension, "application/octet-stream")
 
+def get_youtube_metadata(youtube_url, youtube_video_id):
+    metadata = {
+        "title": f"YouTube video {youtube_video_id}",
+        "artist": "YouTube",
+        "cover_path": f"https://img.youtube.com/vi/{youtube_video_id}/hqdefault.jpg",
+    }
+
+    try:
+        response = httpx.get(
+            "https://www.youtube.com/oembed",
+            params={"url": youtube_url, "format": "json"},
+            timeout=8,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, ValueError):
+        return metadata
+
+    title = (data.get("title") or "").strip()
+    author = (data.get("author_name") or "").strip()
+    thumbnail_url = (data.get("thumbnail_url") or "").strip()
+
+    if title:
+        metadata["title"] = title
+
+    if author:
+        metadata["artist"] = author
+
+    if thumbnail_url:
+        metadata["cover_path"] = thumbnail_url
+
+    return metadata
+
+def clean_up_uploaded_audio(path):
+    try:
+        delete_file(path)
+    except Exception:
+        current_app.logger.exception("Failed to clean up uploaded audio")
+
 @admin_bp.post("/music")
 @role_required("admin", "superadmin")
-def add_music_from_youtube(current_user):
-    data = request.get_json(silent=True) or {}
-    file_path = None
+def add_music(current_user):
+    if request.mimetype != "multipart/form-data":
+        return jsonify({"error": "Use multipart/form-data"}), 415
+
+    data = request.form
     uploaded_path = None
 
     youtube_url = (data.get("youtube_url") or "").strip()
@@ -48,37 +101,50 @@ def add_music_from_youtube(current_user):
             "music": existing_music.to_dict(),
         }), 409
 
+    audio_file = request.files.get("audio_file")
+
+    if audio_file is None:
+        return jsonify({"error": "audio_file is required"}), 400
+
+    original_filename = audio_file.filename or ""
+    extension = os.path.splitext(original_filename)[1].lower()
+
+    if extension not in ALLOWED_AUDIO_EXTENSIONS:
+        return jsonify({"error": "Use MP3, M4A, or AAC audio"}), 400
+
+    file_content = audio_file.read(MAX_AUDIO_UPLOAD_SIZE + 1)
+
+    if not file_content:
+        return jsonify({"error": "Audio file cannot be empty"}), 400
+
+    if len(file_content) > MAX_AUDIO_UPLOAD_SIZE:
+        return jsonify({"error": "Audio file must not exceed 30 MB"}), 400
+
+    detected_content_type = audio_file.mimetype or ""
+    content_type = get_audio_content_type(original_filename)
+
+    if detected_content_type and detected_content_type != "application/octet-stream":
+        content_type = detected_content_type
+
+    audio_path = f"library/{uuid4().hex}{extension}"
+    metadata = get_youtube_metadata(youtube_url, youtube_video_id)
+
     try:
-        try:
-            audio_data = download_audio(youtube_url)
-        except DownloadAudioError as error:
-            return jsonify({
-                "error": "Failed to download audio",
-                "detail": str(error),
-            }), 400
-
-        file_path = audio_data["file_path"]
-        filename = os.path.basename(file_path)
-        audio_path = f"library/{filename}"
-
-        with open(file_path, "rb") as file:
-            file_content = file.read()
-
         uploaded_path = upload_file(
             file_content,
             audio_path,
-            content_type=get_audio_content_type(file_path),
+            content_type=content_type,
         )
 
         if not uploaded_path:
             return jsonify({"error": "Failed to upload audio"}), 500
 
         music = Music(
-            title=audio_data["title"],
-            artist=audio_data["artist"],
-            duration=audio_data["duration"],
+            title=metadata["title"],
+            artist=metadata["artist"],
+            duration=None,
             audio_path=uploaded_path,
-            cover_path=audio_data["cover_path"],
+            cover_path=metadata["cover_path"],
             source_url=youtube_url,
             youtube_video_id=youtube_video_id,
             created_by=current_user.id,
@@ -86,9 +152,6 @@ def add_music_from_youtube(current_user):
 
         db.session.add(music)
         db.session.commit()
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
         return jsonify({
             "message": "Music added successfully",
@@ -99,13 +162,7 @@ def add_music_from_youtube(current_user):
         db.session.rollback()
 
         if uploaded_path:
-            try:
-                delete_file(uploaded_path)
-            except Exception:
-                pass
-
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
+            clean_up_uploaded_audio(uploaded_path)
 
         existing_music = Music.query.filter_by(youtube_video_id=youtube_video_id).first()
 
@@ -116,9 +173,10 @@ def add_music_from_youtube(current_user):
 
     except Exception as error:
         db.session.rollback()
+        current_app.logger.exception("Failed to add music")
 
-        if file_path and os.path.exists(file_path):
-            os.remove(file_path)
+        if uploaded_path:
+            clean_up_uploaded_audio(uploaded_path)
 
         return jsonify({"error": str(error)}), 500
 
@@ -229,6 +287,8 @@ def delete_music(current_user, music_id):
         if audio_path:
             delete_file(audio_path)
     except Exception as error:
+        current_app.logger.exception("Failed to delete audio file")
+
         return jsonify({
             "error": "Failed to delete audio file",
             "detail": str(error),
