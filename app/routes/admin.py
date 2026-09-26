@@ -1,8 +1,10 @@
+from io import BytesIO
 import os
 from uuid import UUID, uuid4
 
 import httpx
 from flask import Blueprint, current_app, jsonify, request
+from mutagen import File as MutagenFile
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
@@ -21,6 +23,7 @@ ALLOWED_AUDIO_EXTENSIONS = {
     ".mp3",
 }
 
+
 def get_audio_content_type(file_path):
     extension = os.path.splitext(file_path)[1].lower()
 
@@ -34,6 +37,27 @@ def get_audio_content_type(file_path):
         ".wav": "audio/wav",
         ".webm": "audio/webm",
     }.get(extension, "application/octet-stream")
+
+
+def get_audio_duration(file_content, filename):
+    try:
+        file_buffer = BytesIO(file_content)
+        file_buffer.name = filename
+        audio = MutagenFile(file_buffer)
+    except Exception:
+        current_app.logger.exception("Failed to read audio duration")
+        return None
+
+    if audio is None or audio.info is None:
+        return None
+
+    duration = getattr(audio.info, "length", None)
+
+    if duration is None:
+        return None
+
+    return round(duration)
+
 
 def get_youtube_metadata(youtube_url, youtube_video_id):
     metadata = {
@@ -68,11 +92,13 @@ def get_youtube_metadata(youtube_url, youtube_video_id):
 
     return metadata
 
+
 def clean_up_uploaded_audio(path):
     try:
         delete_file(path)
     except Exception:
         current_app.logger.exception("Failed to clean up uploaded audio")
+
 
 @admin_bp.post("/music")
 @role_required("admin", "superadmin")
@@ -128,6 +154,7 @@ def add_music(current_user):
 
     audio_path = f"library/{uuid4().hex}{extension}"
     metadata = get_youtube_metadata(youtube_url, youtube_video_id)
+    duration = get_audio_duration(file_content, original_filename)
 
     try:
         uploaded_path = upload_file(
@@ -142,7 +169,7 @@ def add_music(current_user):
         music = Music(
             title=metadata["title"],
             artist=metadata["artist"],
-            duration=None,
+            duration=duration,
             audio_path=uploaded_path,
             cover_path=metadata["cover_path"],
             source_url=youtube_url,
