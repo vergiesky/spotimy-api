@@ -5,7 +5,7 @@ from flask import Blueprint, current_app, jsonify, request
 from PIL import Image, UnidentifiedImageError
 
 from app.extensions import db
-from app.models import Playlist, Music, PlaylistMusic
+from app.models import Music, Playlist, PlaylistMusic
 from app.routes.auth import token_required
 from app.services.storage import create_signed_url, delete_file, upload_file
 

@@ -1,5 +1,7 @@
-from flask import Blueprint, jsonify, request
 from uuid import UUID
+
+from flask import Blueprint, jsonify, request
+
 from app.models import Music
 from app.routes.auth import token_required
 from app.services.storage import create_signed_url

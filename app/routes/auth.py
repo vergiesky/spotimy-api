@@ -3,7 +3,7 @@ from functools import wraps
 from uuid import UUID
 
 import jwt
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, current_app, jsonify, request
 
 from app.extensions import db
 from app.models import User
