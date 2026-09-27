@@ -523,18 +523,33 @@ Headers:
 Authorization: Bearer <token>
 ```
 
-### Add Music From YouTube
+### Add Music From YouTube Metadata And Audio Upload
 
 ```http
 POST /admin/music
 ```
 
-Request body:
+Request content type:
 
-```json
-{
-  "youtube_url": "https://www.youtube.com/watch?v=VIDEO_ID"
-}
+```text
+multipart/form-data
+```
+
+Request fields:
+
+```text
+youtube_url  required  YouTube video URL. Used for title, artist/channel, thumbnail, and duplicate detection.
+audio_file   required  Audio file upload. Supported extensions: .mp3, .m4a, .aac. Max size: 30 MB.
+```
+
+Notes:
+
+```text
+The backend does not download audio from YouTube.
+YouTube is used only for metadata.
+The uploaded audio file is stored in Supabase Storage under library/.
+duration is detected from the uploaded audio file and stored as seconds.
+If duration cannot be detected, duration can be null.
 ```
 
 Success response:
@@ -547,8 +562,8 @@ Success response:
     "title": "Music Title",
     "artist": "Artist Name",
     "album": null,
-    "duration": 274,
-    "audio_path": "library/audio-file.m4a",
+    "duration": 242,
+    "audio_path": "library/audio-file.mp3",
     "cover_path": "https://i.ytimg.com/...",
     "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
     "youtube_video_id": "VIDEO_ID",
@@ -569,8 +584,8 @@ Duplicate response:
     "title": "Music Title",
     "artist": "Artist Name",
     "album": null,
-    "duration": 274,
-    "audio_path": "library/audio-file.m4a",
+    "duration": 242,
+    "audio_path": "library/audio-file.mp3",
     "cover_path": "https://i.ytimg.com/...",
     "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
     "youtube_video_id": "VIDEO_ID",

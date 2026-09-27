@@ -19,7 +19,9 @@ Spotimy API adalah backend untuk aplikasi music streaming Spotimy. Backend ini m
 - Admin music management untuk import, edit, dan hapus musik.
 - Superadmin user management untuk mengelola user dan role.
 - Supabase Storage integration untuk audio dan cover image.
-- YouTube audio import dengan output audio-only `.m4a`.
+- YouTube metadata import untuk title, artist/channel, dan thumbnail.
+- Local audio upload untuk file `.mp3`, `.m4a`, atau `.aac`.
+- Audio duration detection dari file upload.
 
 ## Installation / Setup
 
@@ -49,13 +51,7 @@ Windows PowerShell:
 pip install -r requirements.txt
 ```
 
-5. Install FFmpeg dan pastikan bisa diakses dari terminal:
-
-```bash
-ffmpeg -version
-```
-
-6. Buat file `.env` dari `.env.example`:
+5. Buat file `.env` dari `.env.example`:
 
 ```bash
 cp .env.example .env
@@ -67,7 +63,7 @@ Untuk Windows PowerShell:
 Copy-Item .env.example .env
 ```
 
-7. Isi konfigurasi `.env`:
+6. Isi konfigurasi `.env`:
 
 ```env
 SECRET_KEY=your-secret-key
@@ -87,7 +83,7 @@ BUCKET_NAME=spotimy
 
 Gunakan salah satu konfigurasi database: `SQLALCHEMY_DATABASE_URI` atau `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`.
 
-8. Jalankan migration database:
+7. Jalankan migration database:
 
 ```bash
 flask db upgrade
