@@ -143,7 +143,4 @@ def me(current_user):
 @auth_bp.post("/logout")
 @token_required
 def logout(current_user):
-    return jsonify({
-        "message": "Logout successful. Delete the token on the client",
-        "user": current_user.to_auth_dict()
-    }), 200
+    return jsonify({"message": "Logout successful"}), 200
