@@ -118,13 +118,7 @@ Success response:
 
 ```json
 {
-  "message": "Logout successful. Delete the token on the client",
-  "user": {
-    "id": "user-id",
-    "username": "test",
-    "email": "test@example.com",
-    "role": "user"
-  }
+  "message": "Logout successful"
 }
 ```
 
@@ -523,7 +517,7 @@ Headers:
 Authorization: Bearer <token>
 ```
 
-### Add Music From YouTube Metadata And Audio Upload
+### Add Music With Metadata And Audio Upload
 
 ```http
 POST /admin/music
@@ -538,17 +532,23 @@ multipart/form-data
 Request fields:
 
 ```text
-youtube_url  required  YouTube video URL. Used for title, artist/channel, thumbnail, and duplicate detection.
 audio_file   required  Audio file upload. Supported extensions: .mp3, .m4a, .aac. Max size: 30 MB.
+youtube_url  optional  YouTube video URL. Used to read title, channel/artist, and thumbnail via oEmbed; audio is not downloaded.
+title        optional  Manual title override. Required when metadata is unavailable or no youtube_url is provided.
+artist       optional  Manual artist override. Required when metadata is unavailable or no youtube_url is provided.
+album        optional  Manual album override.
+cover_path   optional  Manual cover image URL override.
 ```
 
 Notes:
 
 ```text
-The backend does not download audio from YouTube.
-YouTube is used only for metadata.
+The backend never downloads audio from YouTube; its oEmbed endpoint supplies metadata only.
+YouTube video URLs are stored in canonical form and duplicate video IDs return HTTP 409.
+Manual fields override YouTube metadata and can be used without a youtube_url.
+The YouTube channel is used as the artist fallback; verify or override it when needed. Album metadata is often unavailable and may need to be entered manually.
 The uploaded audio file is stored in Supabase Storage under library/.
-duration is detected from the uploaded audio file and stored as seconds.
+Duration is detected from the uploaded audio file because oEmbed does not provide duration.
 If duration cannot be detected, duration can be null.
 ```
 
@@ -561,12 +561,11 @@ Success response:
     "id": "music-id",
     "title": "Music Title",
     "artist": "Artist Name",
-    "album": null,
+    "album": "Album Name",
     "duration": 242,
     "audio_path": "library/audio-file.mp3",
-    "cover_path": "https://i.ytimg.com/...",
+    "cover_path": "https://i.ytimg.com/vi/VIDEO_ID/hqdefault.jpg",
     "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
-    "youtube_video_id": "VIDEO_ID",
     "created_by": "user-id",
     "created_at": "2026-08-16T10:00:00+00:00",
     "updated_at": "2026-08-16T10:00:00+00:00"
@@ -578,72 +577,7 @@ Duplicate response:
 
 ```json
 {
-  "error": "Music already exists",
-  "music": {
-    "id": "music-id",
-    "title": "Music Title",
-    "artist": "Artist Name",
-    "album": null,
-    "duration": 242,
-    "audio_path": "library/audio-file.mp3",
-    "cover_path": "https://i.ytimg.com/...",
-    "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
-    "youtube_video_id": "VIDEO_ID",
-    "created_by": "user-id",
-    "created_at": "2026-08-16T10:00:00+00:00",
-    "updated_at": "2026-08-16T10:00:00+00:00"
-  }
-}
-```
-
-### List Music
-
-```http
-GET /admin/music
-```
-
-Query parameters:
-
-```text
-search optional
-page   optional, default 1
-limit  optional, default 20, max 100
-```
-
-Example:
-
-```http
-GET /admin/music?search=kano&page=1&limit=10
-```
-
-Success response:
-
-```json
-{
-  "music": [
-    {
-      "id": "music-id",
-      "title": "Music Title",
-      "artist": "Artist Name",
-      "album": null,
-      "duration": 274,
-      "audio_path": "library/audio-file.m4a",
-      "cover_path": "https://i.ytimg.com/...",
-      "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
-      "youtube_video_id": "VIDEO_ID",
-      "created_by": "user-id",
-      "created_at": "2026-08-16T10:00:00+00:00",
-      "updated_at": "2026-08-16T10:00:00+00:00"
-    }
-  ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total": 1,
-    "pages": 1,
-    "has_next": false,
-    "has_prev": false
-  }
+  "error": "Music already exists"
 }
 ```
 
@@ -679,7 +613,6 @@ Success response:
     "audio_path": "library/audio-file.m4a",
     "cover_path": "https://example.com/new-cover.jpg",
     "source_url": "https://www.youtube.com/watch?v=VIDEO_ID",
-    "youtube_video_id": "VIDEO_ID",
     "created_by": "user-id",
     "created_at": "2026-08-16T10:00:00+00:00",
     "updated_at": "2026-08-16T10:10:00+00:00"

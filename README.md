@@ -19,7 +19,7 @@ Spotimy API adalah backend untuk aplikasi music streaming Spotimy. Backend ini m
 - Admin music management untuk import, edit, dan hapus musik.
 - Superadmin user management untuk mengelola user dan role.
 - Supabase Storage integration untuk audio dan cover image.
-- YouTube metadata import untuk title, artist/channel, dan thumbnail.
+- YouTube oEmbed metadata untuk title, channel/artist, dan thumbnail; duration dibaca dari audio upload.
 - Local audio upload untuk file `.mp3`, `.m4a`, atau `.aac`.
 - Audio duration detection dari file upload.
 
@@ -79,6 +79,7 @@ DB_PASS=password
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SECRET=your-supabase-service-role-key
 BUCKET_NAME=spotimy
+
 ```
 
 Gunakan salah satu konfigurasi database: `SQLALCHEMY_DATABASE_URI` atau `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`.
