@@ -30,5 +30,4 @@ class Config:
     SUPABASE_URL = os.getenv("SUPABASE_URL")
     SUPABASE_KEY = os.getenv("SUPABASE_SECRET")
     BUCKET_NAME = os.getenv("BUCKET_NAME", "spotimy")
-
     SQLALCHEMY_TRACK_MODIFICATIONS = False

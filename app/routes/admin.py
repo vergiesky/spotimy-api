@@ -11,7 +11,7 @@ from app.extensions import db
 from app.models import Music, User, UserRole
 from app.routes.auth import role_required
 from app.services.storage import delete_file, upload_file
-from app.services.youtube import extract_youtube_video_id
+from app.services.youtube import extract_youtube_video_id, get_youtube_video_metadata
 from app.utils import get_pagination_params, pagination_meta
 
 admin_bp = Blueprint("admin", __name__)
@@ -59,38 +59,53 @@ def get_audio_duration(file_content, filename):
     return round(duration)
 
 
-def get_youtube_metadata(youtube_url, youtube_video_id):
+def get_music_metadata(data):
+    youtube_url = (data.get("youtube_url") or "").strip()
     metadata = {
-        "title": f"YouTube video {youtube_video_id}",
-        "artist": "YouTube",
-        "cover_path": f"https://img.youtube.com/vi/{youtube_video_id}/hqdefault.jpg",
+        "title": "",
+        "artist": "",
+        "album": None,
+        "cover_path": None,
+        "duration": None,
+        "source_url": None,
     }
 
-    try:
-        response = httpx.get(
-            "https://www.youtube.com/oembed",
-            params={"url": youtube_url, "format": "json"},
-            timeout=8,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except (httpx.HTTPError, ValueError):
-        return metadata
+    if youtube_url:
+        video_id = extract_youtube_video_id(youtube_url)
 
-    title = (data.get("title") or "").strip()
-    author = (data.get("author_name") or "").strip()
-    thumbnail_url = (data.get("thumbnail_url") or "").strip()
+        if not video_id:
+            return None, {"error": "Invalid YouTube video URL", "status": 400}
 
-    if title:
-        metadata["title"] = title
+        metadata["source_url"] = f"https://www.youtube.com/watch?v={video_id}"
 
-    if author:
-        metadata["artist"] = author
+        try:
+            metadata.update(get_youtube_video_metadata(video_id))
+        except (httpx.HTTPError, ValueError):
+            current_app.logger.exception("Failed to fetch YouTube metadata")
 
-    if thumbnail_url:
-        metadata["cover_path"] = thumbnail_url
+    for field in ("title", "artist", "album", "cover_path"):
+        value = (data.get(field) or "").strip()
 
-    return metadata
+        if value:
+            metadata[field] = value
+
+    if not metadata["title"]:
+        if youtube_url:
+            return None, {
+                "error": "Could not read YouTube metadata; enter title and artist manually",
+                "status": 422,
+            }
+        return None, {"error": "title is required", "status": 400}
+
+    if not metadata["artist"]:
+        if youtube_url:
+            return None, {
+                "error": "Could not read YouTube metadata; enter title and artist manually",
+                "status": 422,
+            }
+        return None, {"error": "artist is required", "status": 400}
+
+    return metadata, None
 
 
 def clean_up_uploaded_audio(path):
@@ -109,23 +124,18 @@ def add_music(current_user):
     data = request.form
     uploaded_path = None
 
-    youtube_url = (data.get("youtube_url") or "").strip()
+    metadata, metadata_error = get_music_metadata(data)
 
-    if not youtube_url:
-        return jsonify({"error": "youtube_url is required"}), 400
+    if metadata_error:
+        return jsonify({"error": metadata_error["error"]}), metadata_error["status"]
 
-    youtube_video_id = extract_youtube_video_id(youtube_url)
+    existing_music = None
 
-    if not youtube_video_id:
-        return jsonify({"error": "Invalid YouTube video URL"}), 400
-
-    existing_music = Music.query.filter_by(youtube_video_id=youtube_video_id).first()
+    if metadata["source_url"]:
+        existing_music = Music.query.filter_by(source_url=metadata["source_url"]).first()
 
     if existing_music:
-        return jsonify({
-            "error": "Music already exists",
-            "music": existing_music.to_dict(),
-        }), 409
+        return jsonify({"error": "Music already exists"}), 409
 
     audio_file = request.files.get("audio_file")
 
@@ -153,8 +163,7 @@ def add_music(current_user):
         content_type = detected_content_type
 
     audio_path = f"library/{uuid4().hex}{extension}"
-    metadata = get_youtube_metadata(youtube_url, youtube_video_id)
-    duration = get_audio_duration(file_content, original_filename)
+    duration = metadata["duration"] or get_audio_duration(file_content, original_filename)
 
     try:
         uploaded_path = upload_file(
@@ -169,11 +178,11 @@ def add_music(current_user):
         music = Music(
             title=metadata["title"],
             artist=metadata["artist"],
+            album=metadata["album"],
             duration=duration,
             audio_path=uploaded_path,
             cover_path=metadata["cover_path"],
-            source_url=youtube_url,
-            youtube_video_id=youtube_video_id,
+            source_url=metadata["source_url"],
             created_by=current_user.id,
         )
 
@@ -191,49 +200,16 @@ def add_music(current_user):
         if uploaded_path:
             clean_up_uploaded_audio(uploaded_path)
 
-        existing_music = Music.query.filter_by(youtube_video_id=youtube_video_id).first()
+        return jsonify({"error": "Music already exists"}), 409
 
-        return jsonify({
-            "error": "Music already exists",
-            "music": existing_music.to_dict() if existing_music else None,
-        }), 409
-
-    except Exception as error:
+    except Exception:
         db.session.rollback()
         current_app.logger.exception("Failed to add music")
 
         if uploaded_path:
             clean_up_uploaded_audio(uploaded_path)
 
-        return jsonify({"error": str(error)}), 500
-
-@admin_bp.get("/music")
-@role_required("admin", "superadmin")
-def list_music(current_user):
-    search = (request.args.get("search") or "").strip()
-
-    query = Music.query
-
-    if search:
-        query = query.filter(
-            db.or_(
-                Music.title.ilike(f"%{search}%"),
-                Music.artist.ilike(f"%{search}%"),
-            )
-        )
-
-    page, limit = get_pagination_params()
-
-    pagination = query.order_by(Music.created_at.desc()).paginate(
-        page=page,
-        per_page=limit,
-        error_out=False,
-    )
-
-    return jsonify({
-        "music": [song.to_dict() for song in pagination.items],
-        "pagination": pagination_meta(pagination),
-    }), 200
+        return jsonify({"error": "Failed to add music"}), 500
 
 @admin_bp.patch("/music/<music_id>")
 @role_required("admin", "superadmin")
@@ -313,13 +289,10 @@ def delete_music(current_user, music_id):
     try:
         if audio_path:
             delete_file(audio_path)
-    except Exception as error:
+    except Exception:
         current_app.logger.exception("Failed to delete audio file")
 
-        return jsonify({
-            "error": "Failed to delete audio file",
-            "detail": str(error),
-        }), 500
+        return jsonify({"error": "Failed to delete audio file"}), 500
 
     db.session.delete(music)
     db.session.commit()
